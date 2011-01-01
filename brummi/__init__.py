@@ -3,14 +3,43 @@ import os
 import jinja2
 import markdown2
 from pyooc.parser import Repository, Module
+from pyooc.parser.tag import parse_string as parse_tag, translate
 
 REPO = None
 
 def markdown_doc(member):
     return MARKDOWN.convert(member.doc, member)
 
+def resolve_tag(tag, cb=lambda x:x):
+    if '(' in tag:
+        mod, args = parse_tag(tag)
+        if mod == 'pointer':
+            return resolve_tag(translate(args[0]), cb) + '*'
+        elif mod == 'reference':
+            return resolve_tag(translate(args[0]), cb) + '@'
+        elif mod == 'multi':
+            return '(' + ', '.join(resolve_tag(translate(arg), cb) for arg in args) + ')'
+        elif mod == 'Func':
+            return cb('Func') # TODO: specialized functions
+        else:
+            return 'dunno'
+    else:
+        return cb(tag)
+
+def link_tag(member, tag):
+    def cb(t):
+        crosslink = REPO.resolve_crosslink(member, t)
+        if crosslink:
+            return '<a href="%s">%s</a>' % (crosslink, t) # no need to escape i think. TODO?
+        else:
+            return t
+    return resolve_tag(tag, cb)
+
 def is_parent(member):
     return hasattr(member, 'members')
+
+def is_node(member, *names):
+    return any(any(cls.__name__.lower() == n for n in names) for cls in member.__class__.mro())
 
 class MarkdownWithBenefits(markdown2.Markdown):
     def convert(self, text, member=None):
@@ -21,13 +50,13 @@ class MarkdownWithBenefits(markdown2.Markdown):
         """
             Actually make them links if possible.
         """
-        contents = match.group(2)
-        if self._member is not None:
-            resolved = self._member.resolve_name(contents)
-            if resolved:
-                module = self._member.get_module()
-                return '<a href="%s">%s</a>' % (REPO.get_link(resolved, module), '<code>%s</code>' % contents)
-        return markdown2.Markdown._code_span_sub(self, match)
+        contents = match.group(2).strip(' \t')
+        code = self._encode_code(contents)
+        if self._member:
+            crosslink = REPO.resolve_crosslink(self._member, contents)
+            if crosslink:
+                code = '<a href="%s">%s</a>' % (crosslink, code)
+        return '<code>%s</code>' % code
 
 MARKDOWN = MarkdownWithBenefits()
 
@@ -39,16 +68,33 @@ class BrummiRepository(Repository):
             loader=jinja2.FileSystemLoader(jinja_path)
         )
         self.jinja_env.filters['markdown_doc'] = markdown_doc
+        self.jinja_env.filters['resolve_tag'] = resolve_tag
+        self.jinja_env.filters['link_tag'] = link_tag
+        self.jinja_env.filters['anchor'] = self.get_anchor
         self.jinja_env.tests['parent'] = is_parent
+        self.jinja_env.tests['node'] = is_node
+
+    def resolve_crosslink(self, member, contents):
+        resolved = member.resolve_name(contents)
+        if resolved:
+            module = member.get_module()
+            return REPO.get_link(resolved, module)
+        else:
+            return None
+
+    def get_anchor(self, member):
+        anchor = []
+        while not isinstance(member, Module):
+            anchor.insert(0, member.name)
+            member = member.parent
+        return '-'.join(anchor)
 
     def get_link(self, member, start_module=None):
-        path = ['.html']
-        while not isinstance(member, Module):
-            path.insert(0, member.name)
-            member = member.parent
-        if len(path) > 1:
+        path = [self.get_anchor(member)]
+        if path[0]:
             path.insert(0, '#')
-        path.insert(0, member.path)
+        path.insert(0, '.html')
+        path.insert(0, member.get_module().path)
         if start_module is None:
             return '/' + ''.join(path)
         else:

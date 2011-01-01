@@ -1,4 +1,4 @@
 import text/Regexp
 
 /** fufu! `text/Regexp` */
-fufu: func {}
+fufu: func (a: Int) -> (Int, String) { (1, "") }

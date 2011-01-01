@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% macro document_function(member) %}
+    {{ member.name }}(
+    {% for arg in member.arguments %}
+        {% if arg.name %}{{ arg.name }}: {% endif %}{{ member|link_tag(arg.tag) }}{% if not loop.last %}, {% endif %}
+    {% endfor %}
+    )
+    {% if member.return_type %}
+        -> {{ member|link_tag(member.return_type) }}
+    {% endif %}
+    </dt>
+    <dd>{{ member|markdown_doc }}</dd>
+{% endmacro %}
+
+{% macro document_members(parent) %}
+    <dl>
+    {% for member in parent.members.itervalues() %}
+        {{ document_member(member) }}
+        {#{% if member is node('function') %}
+            {{ document_function(member) }}
+        {% else %}
+            <a name="{{ member|anchor }}" />
+            <dt>{{ member.name }}</dt>
+            <dd>{{ member|markdown_doc }}
+            {% if member is parent %}
+                {{ document_members(member) }}
+            {% endif %}
+            </dd>
+        {% endif %}
+        #}
+    {% endfor %}
+    </dl>
+{% endmacro %}
+
+{% macro document_member(member) %}
+    <a name="{{ member|anchor }}" />
+    {% if member is node('module', 'class', 'cover', 'interface') %}
+        {{ document_members(member) }}
+    {% elif member is node('function') %}
+        {{ document_function(member) }}
+    {% endif %}
+{% endmacro %}
+
+{% block title %}
+    {{ module.path }}
+{% endblock %}
+
+{% block contents %}
+    {{ document_member(module) }}
+{% endblock %}
