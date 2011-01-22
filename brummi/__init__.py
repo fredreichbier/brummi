@@ -63,6 +63,7 @@ MARKDOWN = MarkdownWithBenefits()
 class BrummiRepository(Repository):
     def __init__(self, ooc_path, jinja_path, out_path):
         Repository.__init__(self, ooc_path)
+        self.modules = None
         self.out_path = out_path
         self.jinja_env = jinja2.Environment(
             loader=jinja2.FileSystemLoader(jinja_path)
@@ -109,12 +110,13 @@ class BrummiRepository(Repository):
 
     def build_module(self, module):
         template = self.jinja_env.get_template('module.html')
-        output = template.render(module=module)
+        output = template.render(module=module, modules=self.modules)
         with open(self.get_out_path(module), 'w') as f:
             f.write(output)
 
     def build_all_modules(self):
-        for path, module in self.get_all_modules().iteritems():
+        self.modules = self.get_all_modules().values()
+        for module in self.modules:
             self.build_module(module)
 
 def main(ooc_path, jinja_path, out_path):

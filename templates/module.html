@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% macro document_function(member) %}
-    {{ member.name }}(
+    <dt>{{ member.name }}(
     {% for arg in member.arguments %}
         {% if arg.name %}{{ arg.name }}: {% endif %}{{ member|link_tag(arg.tag) }}{% if not loop.last %}, {% endif %}
     {% endfor %}
@@ -13,32 +13,21 @@
     <dd>{{ member|markdown_doc }}</dd>
 {% endmacro %}
 
-{% macro document_members(parent) %}
-    <dl>
-    {% for member in parent.members.itervalues() %}
-        {{ document_member(member) }}
-        {#{% if member is node('function') %}
-            {{ document_function(member) }}
-        {% else %}
-            <a name="{{ member|anchor }}" />
-            <dt>{{ member.name }}</dt>
-            <dd>{{ member|markdown_doc }}
-            {% if member is parent %}
-                {{ document_members(member) }}
-            {% endif %}
-            </dd>
-        {% endif %}
-        #}
+{% macro document_classlike(node) %}
+    <dt>{{ node.name }}</dt>
+    <dd><dl>
+    {% for member in node.members.itervalues() %}
+        {{ document_node(member) }}
     {% endfor %}
-    </dl>
+    </dl></dd>
 {% endmacro %}
 
-{% macro document_member(member) %}
-    <a name="{{ member|anchor }}" />
-    {% if member is node('module', 'class', 'cover', 'interface') %}
-        {{ document_members(member) }}
-    {% elif member is node('function') %}
-        {{ document_function(member) }}
+{% macro document_node(node) %}
+    <a name="{{ node|anchor }}" />
+    {% if node is node('module', 'class', 'cover', 'interface') %}
+        {{ document_classlike(node) }}
+    {% elif node is node('function') %}
+        {{ document_function(node) }}
     {% endif %}
 {% endmacro %}
 
@@ -47,5 +36,5 @@
 {% endblock %}
 
 {% block contents %}
-    {{ document_member(module) }}
+    <dl>{{ document_node(module) }}</dl>
 {% endblock %}
