@@ -14,6 +14,11 @@ setup(name='brummi',
     [console_scripts]
     brummi = brummi.main:run_brummi
     """,
+    install_requires=[
+        'jinja2',
+        'markdown2',
+        'pyooc',
+    ]
 )
 
 
