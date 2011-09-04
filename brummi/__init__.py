@@ -5,36 +5,6 @@ import markdown2
 from pyooc.parser import Repository, Module
 from pyooc.parser.tag import parse_string as parse_tag, translate
 
-REPO = None
-
-def markdown_doc(member):
-    return MARKDOWN.convert(member.doc, member)
-
-def resolve_tag(tag, cb=lambda x:x):
-    if '(' in tag:
-        mod, args = parse_tag(tag)
-        if mod == 'pointer':
-            return resolve_tag(translate(args[0]), cb) + '*'
-        elif mod == 'reference':
-            return resolve_tag(translate(args[0]), cb) + '@'
-        elif mod == 'multi':
-            return '(' + ', '.join(resolve_tag(translate(arg), cb) for arg in args) + ')'
-        elif mod == 'Func':
-            return cb('Func') # TODO: specialized functions
-        else:
-            return 'dunno'
-    else:
-        return cb(tag)
-
-def link_tag(member, tag):
-    def cb(t):
-        crosslink = REPO.resolve_crosslink(member, t)
-        if crosslink:
-            return '<a href="%s">%s</a>' % (crosslink, t) # no need to escape i think. TODO?
-        else:
-            return t
-    return resolve_tag(tag, cb)
-
 def is_parent(member):
     return hasattr(member, 'members')
 
@@ -42,6 +12,10 @@ def is_node(member, *names):
     return any(any(cls.__name__.lower() == n for n in names) for cls in member.__class__.mro())
 
 class MarkdownWithBenefits(markdown2.Markdown):
+    def __init__(self, repo, *args, **kwargs):
+        markdown2.Markdown.__init__(self, *args, **kwargs)
+        self.repo = repo
+
     def convert(self, text, member=None):
         self._member = member
         return markdown2.Markdown.convert(self, text)
@@ -53,12 +27,10 @@ class MarkdownWithBenefits(markdown2.Markdown):
         contents = match.group(2).strip(' \t')
         code = self._encode_code(contents)
         if self._member:
-            crosslink = REPO.resolve_crosslink(self._member, contents)
+            crosslink = self.repo.resolve_crosslink(self._member, contents)
             if crosslink:
                 code = '<a href="%s">%s</a>' % (crosslink, code)
         return '<code>%s</code>' % code
-
-MARKDOWN = MarkdownWithBenefits()
 
 class BrummiRepository(Repository):
     def __init__(self, ooc_path, jinja_path, out_path):
@@ -68,18 +40,47 @@ class BrummiRepository(Repository):
         self.jinja_env = jinja2.Environment(
             loader=jinja2.FileSystemLoader(jinja_path)
         )
-        self.jinja_env.filters['markdown_doc'] = markdown_doc
-        self.jinja_env.filters['resolve_tag'] = resolve_tag
-        self.jinja_env.filters['link_tag'] = link_tag
+        self.markdown = MarkdownWithBenefits(self)
+        self.jinja_env.filters['markdown_doc'] = self.markdown_doc
+        self.jinja_env.filters['resolve_tag'] = self.resolve_tag
+        self.jinja_env.filters['link_tag'] = self.link_tag
         self.jinja_env.filters['anchor'] = self.get_anchor
         self.jinja_env.tests['parent'] = is_parent
         self.jinja_env.tests['node'] = is_node
+
+    def markdown_doc(self, member):
+        return self.markdown.convert(member.doc, member)
+
+    def resolve_tag(self, tag, cb=lambda x:x):
+        if '(' in tag:
+            mod, args = parse_tag(tag)
+            if mod == 'pointer':
+                return self.resolve_tag(translate(args[0]), cb) + '*'
+            elif mod == 'reference':
+                return self.resolve_tag(translate(args[0]), cb) + '@'
+            elif mod == 'multi':
+                return '(' + ', '.join(self.resolve_tag(translate(arg), cb) for arg in args) + ')'
+            elif mod == 'Func':
+                return cb('Func') # TODO: specialized functions
+            else:
+                return 'dunno'
+        else:
+            return cb(tag)
+
+    def link_tag(self, member, tag):
+        def cb(t):
+            crosslink = self.resolve_crosslink(member, t)
+            if crosslink:
+                return '<a href="%s">%s</a>' % (crosslink, t) # no need to escape i think. TODO?
+            else:
+                return t
+        return self.resolve_tag(tag, cb)
 
     def resolve_crosslink(self, member, contents):
         resolved = member.resolve_name(contents)
         if resolved:
             module = member.get_module()
-            return REPO.get_link(resolved, module)
+            return self.get_link(resolved, module)
         else:
             return None
 
@@ -119,7 +120,3 @@ class BrummiRepository(Repository):
         for module in self.modules:
             self.build_module(module)
 
-def main(ooc_path, jinja_path, out_path):
-    global REPO
-    repo = REPO = BrummiRepository(ooc_path, jinja_path, out_path)
-    repo.build_all_modules()
