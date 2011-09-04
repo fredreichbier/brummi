@@ -1,16 +1,15 @@
 import sys
-
+import json
 import pkg_resources
 
-from . import main
+from .config import Config
 
 def run_brummi():
     try:
-        repo_path = sys.argv[1]
-        out_path = sys.argv[2]
+        cfg_path = sys.argv[1]
     except IndexError:
-        print 'Usage: brummi REPO_PATH OUT_PATH'
+        print 'Usage: brummi config.json'
         return 0
-    jinja_path = pkg_resources.resource_filename('brummi', 'templates')
-    print jinja_path
-    main(repo_path, jinja_path, out_path)
+    with open(cfg_path, 'r') as f:
+        cfg = Config(json.load(f))
+    cfg.launch()
