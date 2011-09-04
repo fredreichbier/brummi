@@ -24,5 +24,14 @@ Now, do that (assuming `python` is python 2.7):
 
 # usage
 
-not yet!
+first, create a ooc json repo for your code. in the future, brummi will do it for you, but for now, it doesn't:
 
+    rock -backend=json -outpath=ooc_repo myfile.ooc
+
+then, create a `config.json` for brummi. it's a text file containing json containing configuration options. see `example-config.json` for examples. `ooc_path` is the (relative or absolute) path to the json repo created above. `out_path` is the directory the resulting api docs will be put into.
+
+then, run brummi:
+
+    brummi config.json
+
+and that's all for now. have fun -- and if you run into problems, ping me.
